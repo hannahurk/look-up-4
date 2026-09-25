@@ -1516,8 +1516,13 @@
   }
 
   function startSlideCycle() {
-    ['mousemove', 'touchstart', 'touchmove', 'keydown', 'click', 'scroll'].forEach((evt) => {
-      window.addEventListener(evt, onMotion, { passive: true });
+    // Deliberate inputs always change the slide; passive movement (mouse move,
+    // touch drag, scroll) only counts as a new visitor after a still moment.
+    ['touchstart', 'keydown', 'click'].forEach((evt) => {
+      window.addEventListener(evt, onDirectInput, { passive: true });
+    });
+    ['mousemove', 'touchmove', 'scroll'].forEach((evt) => {
+      window.addEventListener(evt, onInputMovement, { passive: true });
     });
     dwellTimer = setTimeout(advance, nextDwell());
   }
@@ -1537,7 +1542,12 @@
   const SAMPLE_W = 32;
   const SAMPLE_H = 24;
 
+  // Camera and mouse/touch each keep their own clock, so a camera that sees
+  // someone standing there can't swallow a click or key press.
   let lastMotionAt = 0;
+  let lastInputMoveAt = 0;
+  let lastDirectAt = 0;
+  const DIRECT_INPUT_GAP_MS = 1200; // ignore double-taps and held keys
 
   // A gentle sideways blur that ramps up and back down over the slide change,
   // only when a new visitor triggers it (not on the ordinary timer).
@@ -1547,7 +1557,7 @@
 
   function motionBlur() {
     const node = document.getElementById('motion-blur-node');
-    if (!node || motionBlurActive || reduceMotion) return;
+    if (!node || motionBlurActive) return;
     motionBlurActive = true;
     document.body.classList.add('motion-blur');
     const start = performance.now();
@@ -1562,14 +1572,30 @@
     })(start);
   }
 
+  function changeSlideForVisitor() {
+    motionBlur();
+    advance();
+  }
+
   function onMotion() {
     const now = performance.now();
     const isNewVisitor = now - lastMotionAt > MOTION_QUIET_MS;
     lastMotionAt = now;
-    if (isNewVisitor) {
-      motionBlur();
-      advance();
-    }
+    if (isNewVisitor) changeSlideForVisitor();
+  }
+
+  function onInputMovement() {
+    const now = performance.now();
+    const isNewVisitor = now - lastInputMoveAt > MOTION_QUIET_MS;
+    lastInputMoveAt = now;
+    if (isNewVisitor) changeSlideForVisitor();
+  }
+
+  function onDirectInput() {
+    const now = performance.now();
+    const allowed = now - lastDirectAt > DIRECT_INPUT_GAP_MS;
+    lastDirectAt = now;
+    if (allowed) changeSlideForVisitor();
   }
 
   async function startCameraMotion() {
