@@ -110,6 +110,18 @@
     frameEl.src = '';
 
     if (apod.mediaType === 'image') {
+      // Try the HD picture first; if NASA's HD file is missing, fall back to
+      // the standard-size one, and only show the placeholder if both fail.
+      let triedFallback = false;
+      imgEl.onerror = () => {
+        if (!triedFallback && apod.fallbackImageUrl) {
+          triedFallback = true;
+          imgEl.src = apod.fallbackImageUrl;
+        } else {
+          imgEl.onerror = null;
+          renderAPODError();
+        }
+      };
       imgEl.src = apod.imageUrl;
       imgEl.alt = apod.title;
     } else if (apod.mediaType === 'video') {

@@ -80,6 +80,9 @@ function normalizeAPOD(data) {
     title: data.title || '',
     mediaType: data.media_type || 'other',
     imageUrl: data.hdurl || data.url || '',
+    // NASA's HD file is sometimes missing (404) while the standard-size one
+    // is fine, so the page falls back to this one if the HD picture fails.
+    fallbackImageUrl: data.media_type === 'image' && data.hdurl && data.url && data.url !== data.hdurl ? data.url : '',
     videoUrl: data.media_type === 'video' ? data.url || '' : '',
   };
 }
