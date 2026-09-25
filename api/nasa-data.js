@@ -9,7 +9,8 @@ const CME_URL = 'https://api.nasa.gov/DONKI/CME';
 const GST_URL = 'https://api.nasa.gov/DONKI/GST';
 // NASA moved APOD to a new WordPress-based endpoint on 2026-09-10. The old
 // one is still answering but goes offline 2026-12-01, so the new one is tried
-// first and the old one is kept as a backup until it disappears.
+// first and the old one is kept as a backup until it disappears. After that
+// date, APOD_LEGACY_URL and normalizeAPOD can be deleted.
 const APOD_URL = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic/';
 const APOD_LEGACY_URL = 'https://api.nasa.gov/planetary/apod';
 
