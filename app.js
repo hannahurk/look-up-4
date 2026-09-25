@@ -1104,7 +1104,10 @@
     if (!w || !h) return;
     auroraBgCtx.clearRect(0, 0, w, h);
 
-    auroraBgClock += dt * (reduceMotion ? 0.001 : 0.0025); // slower, calmer sway than the real art
+    // Paced to feel as calm/slow as the solar wind card's drifting dots
+    // (a different animation mechanism, so not a literal shared speed value,
+    // but tuned to read at the same unhurried tempo).
+    auroraBgClock += dt * (reduceMotion ? 0.00018 : 0.00045);
     const t = auroraBgClock * 40;
     const a = AURORA_BG;
     const maxH = h * (0.14 + 0.14 * a);
