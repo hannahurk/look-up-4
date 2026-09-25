@@ -1516,14 +1516,9 @@
   }
 
   function startSlideCycle() {
-    // Deliberate inputs always change the slide; passive movement (mouse move,
-    // touch drag, scroll) only counts as a new visitor after a still moment.
-    ['touchstart', 'keydown', 'click'].forEach((evt) => {
-      window.addEventListener(evt, onDirectInput, { passive: true });
-    });
-    ['mousemove', 'touchmove', 'scroll'].forEach((evt) => {
-      window.addEventListener(evt, onInputMovement, { passive: true });
-    });
+    // Pressing the mouse button down (a tap on a touchscreen also fires it) is
+    // the only manual trigger; mouse movement, key presses and scrolling do nothing.
+    window.addEventListener('mousedown', onDirectInput, { passive: true });
     dwellTimer = setTimeout(advance, nextDwell());
   }
 
@@ -1532,7 +1527,7 @@
   // Frame differencing on a tiny downscaled copy of the webcam feed. Frames
   // are compared and thrown away in the browser — nothing is recorded or sent
   // anywhere. If the camera is missing or permission is denied, the sign just
-  // keeps using the mouse/touch fallback above and the timer.
+  // keeps using the mouse-click fallback above and the timer.
 
   const MOTION_SAMPLE_MS = 120;
   const MOTION_QUIET_MS = 3000; // stillness needed before movement counts as a new visitor
@@ -1542,12 +1537,11 @@
   const SAMPLE_W = 32;
   const SAMPLE_H = 24;
 
-  // Camera and mouse/touch each keep their own clock, so a camera that sees
-  // someone standing there can't swallow a click or key press.
+  // Camera and mouse-down each keep their own clock, so a camera that sees
+  // someone standing there can't swallow a click.
   let lastMotionAt = 0;
-  let lastInputMoveAt = 0;
   let lastDirectAt = 0;
-  const DIRECT_INPUT_GAP_MS = 1200; // ignore double-taps and held keys
+  const DIRECT_INPUT_GAP_MS = 1200; // ignore double-clicks
 
   // A gentle sideways blur that ramps up and back down over the slide change,
   // only when a new visitor triggers it (not on the ordinary timer).
@@ -1584,13 +1578,6 @@
     if (isNewVisitor) changeSlideForVisitor();
   }
 
-  function onInputMovement() {
-    const now = performance.now();
-    const isNewVisitor = now - lastInputMoveAt > MOTION_QUIET_MS;
-    lastInputMoveAt = now;
-    if (isNewVisitor) changeSlideForVisitor();
-  }
-
   function onDirectInput() {
     const now = performance.now();
     const allowed = now - lastDirectAt > DIRECT_INPUT_GAP_MS;
@@ -1605,7 +1592,7 @@
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
     } catch (err) {
-      console.info('camera motion unavailable — using mouse/touch instead:', err && err.name);
+      console.info('camera motion unavailable — using mouse click instead:', err && err.name);
       return;
     }
 

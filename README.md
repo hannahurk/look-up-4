@@ -16,7 +16,7 @@ Some sources don't need a key at all, so `app.js` fetches them directly: [NASA's
 
 ## The slides
 
-Each slide holds for 15–18 seconds (a random time in that range) — except the art, which always holds the full 40 seconds — then the sign moves on to the next — and a camera detecting a new visitor (movement after a few seconds of stillness) advances it immediately, with a brief sideways motion blur. Click, key press and touch tap always change the slide; mouse movement, touch drag and scroll count as a new visitor after a few still seconds. The blur plays even when the device has "reduce motion" turned on, since it's short and this sign is meant to show it. The order: **APOD photo → EPIC Earth image → six Cosmic Meteorology slides → Algorithm Art → back to APOD.**
+Each slide holds for 15–18 seconds (a random time in that range) — except the art, which always holds the full 40 seconds — then the sign moves on to the next — and a camera detecting a new visitor (movement after a few seconds of stillness) advances it immediately, with a brief sideways motion blur. Pressing the mouse button down (or tapping a touchscreen) does the same; mouse movement, key presses and scrolling do nothing. The blur plays even when the device has "reduce motion" turned on, since it's short and this sign is meant to show it. The order: **APOD photo → EPIC Earth image → six Cosmic Meteorology slides → Algorithm Art → back to APOD.**
 
 - **APOD** — full-bleed image or video, whichever picture NASA published today.
 - **EPIC** — the most recent full-disk photo of Earth from the DSCOVR satellite.
@@ -45,7 +45,7 @@ Displayed values ease toward the latest fetched numbers rather than snapping, so
 
 ## Camera motion
 
-The sign asks for webcam access on load and uses simple frame differencing on a tiny (32×24) downscaled copy of the feed to detect movement. Frames are compared and discarded in the browser — nothing is recorded or sent anywhere. Motion detection runs at high sensitivity. Movement after about three seconds of stillness counts as a new visitor and advances to the next screen right away (and restarts the hold); continuous movement doesn't skip screens. Sudden whole-frame brightness changes (lights, auto-exposure) are ignored. If there's no camera or permission is denied, mouse/touch/keyboard activity counts as movement instead, and the timer still runs. For a kiosk, allow camera access for the site once in the browser's site settings so it never prompts.
+The sign asks for webcam access on load and uses simple frame differencing on a tiny (32×24) downscaled copy of the feed to detect movement. Frames are compared and discarded in the browser — nothing is recorded or sent anywhere. Motion detection runs at high sensitivity. Movement after about three seconds of stillness counts as a new visitor and advances to the next screen right away (and restarts the hold); continuous movement doesn't skip screens. Sudden whole-frame brightness changes (lights, auto-exposure) are ignored. If there's no camera or permission is denied, pressing the mouse button counts as movement instead, and the timer still runs. For a kiosk, allow camera access for the site once in the browser's site settings so it never prompts.
 
 ## If NASA is unreachable
 
