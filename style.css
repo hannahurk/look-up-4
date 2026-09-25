@@ -196,7 +196,7 @@ body.mode-art #art {
 .fc-row.is-warn b { color: var(--amber); }
 
 /* Each Cosmic Meteorology slide shows one card, large, and fades it in. */
-.key-screen .fc { max-width: 900px; }
+.key-screen .fc { position: relative; z-index: 1; max-width: 900px; }
 .key-screen .fc-days { grid-template-columns: 1fr; }
 .key-screen .fc-day { display: none; }
 .key-screen .fc-day.is-active {
@@ -211,6 +211,19 @@ body.mode-art #art {
 }
 .key-screen .fc-cond { font-size: clamp(30px, min(6.4vw, 11vh), 100px); }
 .key-screen .fc-row { font-size: clamp(16px, min(2.6vw, 4.4vh), 40px); }
+
+/* Decorative purple arcs behind the coronal mass ejections card, echoing the
+   arcs in Algorithm Art. Not live data — just motion, always on a loop. */
+.cme-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+body.mode-key .cme-bg.is-active { opacity: 1; }
 
 @keyframes fc-in {
   from { opacity: 0; transform: translateY(10px); }

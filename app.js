@@ -17,6 +17,8 @@
 
   const canvas = document.getElementById('art');
   const ctx = canvas.getContext('2d');
+  const cmeBg = document.getElementById('cme-bg');
+  const cmeBgCtx = cmeBg.getContext('2d');
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('status-text');
 
@@ -223,9 +225,14 @@
   // Only the card for the current Cosmic Meteorology slide is shown.
   function showKeyCard() {
     const index = mode.startsWith('key:') ? Number(mode.slice(4)) : -1;
+    let activeIsCme = false;
     document.querySelectorAll('#key-cards .fc-day').forEach((card) => {
-      card.classList.toggle('is-active', Number(card.dataset.i) === index);
+      const isActive = Number(card.dataset.i) === index;
+      card.classList.toggle('is-active', isActive);
+      if (isActive && card.dataset.kind === 'ring') activeIsCme = true;
     });
+    if (activeIsCme) startCmeBg();
+    else stopCmeBg();
   }
 
   function paintArtKey() {
@@ -310,6 +317,7 @@
       const card = document.createElement('div');
       card.className = 'fc-day';
       card.dataset.i = String(i);
+      card.dataset.kind = c.glyph;
 
       const label = document.createElement('div');
       label.className = 'fc-date';
@@ -524,6 +532,98 @@
     buildStars();
     rebuildOrbits(latestData.asteroids || []);
     rebuildParticles();
+    resizeCmeBg();
+  }
+
+  // ---------- coronal mass ejections card: decorative purple arcs ----------
+  //
+  // Same shape, easing and speed math as the real CME arcs in Algorithm Art
+  // (drawCMEs) — just fed a fixed set of made-up rings instead of live data,
+  // since this is a background flourish for the card, not a data display.
+
+  let cmeBgWidth = 0;
+  let cmeBgHeight = 0;
+
+  function resizeCmeBg() {
+    cmeBgWidth = cmeBg.clientWidth;
+    cmeBgHeight = cmeBg.clientHeight;
+    const bgDpr = Math.min(window.devicePixelRatio || 1, 2);
+    cmeBg.width = cmeBgWidth * bgDpr;
+    cmeBg.height = cmeBgHeight * bgDpr;
+    cmeBgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+  }
+
+  const decorativeRings = (() => {
+    const rand = makeRandom(hashString('cme-bg-decorative'));
+    const count = 4;
+    return Array.from({ length: count }, (_, i) => ({
+      t: i / count,
+      angle: rand() * Math.PI * 2,
+      half: 0.6 + rand() * 0.4,
+      kms: 400 + rand() * 1000,
+    }));
+  })();
+
+  function drawCmeBg(dt) {
+    const w = cmeBgWidth;
+    const h = cmeBgHeight;
+    if (!w || !h) return;
+    cmeBgCtx.clearRect(0, 0, w, h);
+
+    const center = { x: w / 2, y: h / 2 };
+    const startR = Math.min(w, h) * 0.08;
+    const endR = Math.hypot(Math.max(center.x, w - center.x), Math.max(center.y, h - center.y));
+    const bgUi = clamp(Math.min(w, h) / 750, 1, 2.2);
+
+    cmeBgCtx.lineCap = 'round';
+    for (const ring of decorativeRings) {
+      const period = mapRange(ring.kms, 300, 2000, 5400, 1800);
+      ring.t += (dt / period) * (reduceMotion ? 0.15 : 1);
+      if (ring.t >= 1) ring.t -= 1;
+
+      const alpha = 0.8 * Math.min(ring.t / 0.06, 1) * (1 - Math.max((ring.t - 0.85) / 0.15, 0));
+      if (alpha <= 0) continue;
+      const r = startR + ring.t * (endR - startR);
+      const a0 = ring.angle - ring.half;
+      const a1 = ring.angle + ring.half;
+
+      cmeBgCtx.strokeStyle = rgba(palette.cme, alpha * 0.3);
+      cmeBgCtx.lineWidth = (8 + ring.t * 16) * bgUi;
+      cmeBgCtx.beginPath();
+      cmeBgCtx.arc(center.x, center.y, r, a0, a1);
+      cmeBgCtx.stroke();
+
+      cmeBgCtx.strokeStyle = rgba(palette.cme, alpha);
+      cmeBgCtx.lineWidth = (2.5 + ring.t * 2.5) * bgUi;
+      cmeBgCtx.beginPath();
+      cmeBgCtx.arc(center.x, center.y, r, a0, a1);
+      cmeBgCtx.stroke();
+    }
+    cmeBgCtx.lineCap = 'butt';
+  }
+
+  let cmeBgRunning = false;
+  let cmeBgLastTime = 0;
+
+  function cmeBgFrame(now) {
+    if (!cmeBgRunning) return;
+    const dt = clamp(now - cmeBgLastTime, 0, 64) / 16.6667;
+    cmeBgLastTime = now;
+    drawCmeBg(dt);
+    requestAnimationFrame(cmeBgFrame);
+  }
+
+  function startCmeBg() {
+    cmeBg.classList.add('is-active');
+    if (cmeBgRunning) return;
+    cmeBgRunning = true;
+    cmeBgLastTime = performance.now();
+    requestAnimationFrame(cmeBgFrame);
+  }
+
+  function stopCmeBg() {
+    cmeBgRunning = false;
+    cmeBg.classList.remove('is-active');
   }
 
   // ---------- Algorithm Art: drawing ----------
@@ -955,6 +1055,7 @@
 
   window.addEventListener('resize', resize);
   resize();
+  resizeCmeBg();
   ctx.fillStyle = 'rgb(10, 11, 14)';
   ctx.fillRect(0, 0, width, height);
 
