@@ -21,6 +21,8 @@
   const cmeBgCtx = cmeBg.getContext('2d');
   const asteroidBg = document.getElementById('asteroid-bg');
   const asteroidBgCtx = asteroidBg.getContext('2d');
+  const flareBg = document.getElementById('flare-bg');
+  const flareBgCtx = flareBg.getContext('2d');
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('status-text');
 
@@ -229,16 +231,20 @@
     const index = mode.startsWith('key:') ? Number(mode.slice(4)) : -1;
     let activeIsCme = false;
     let activeIsAsteroid = false;
+    let activeIsFlare = false;
     document.querySelectorAll('#key-cards .fc-day').forEach((card) => {
       const isActive = Number(card.dataset.i) === index;
       card.classList.toggle('is-active', isActive);
       if (isActive && card.dataset.kind === 'ring') activeIsCme = true;
       if (isActive && card.dataset.kind === 'orbit') activeIsAsteroid = true;
+      if (isActive && card.dataset.kind === 'core') activeIsFlare = true;
     });
     if (activeIsCme) startCmeBg();
     else stopCmeBg();
     if (activeIsAsteroid) startAsteroidBg();
     else stopAsteroidBg();
+    if (activeIsFlare) startFlareBg();
+    else stopFlareBg();
   }
 
   function paintArtKey() {
@@ -540,6 +546,7 @@
     rebuildParticles();
     resizeCmeBg();
     resizeAsteroidBg();
+    resizeFlareBg();
   }
 
   // ---------- coronal mass ejections card: decorative purple arcs ----------
@@ -747,6 +754,82 @@
   function stopAsteroidBg() {
     asteroidBgRunning = false;
     asteroidBg.classList.remove('is-active');
+  }
+
+  // ---------- solar flare strength card: decorative glowing core ----------
+  //
+  // Same shape and easing as the real glowing core in Algorithm Art
+  // (drawCore) — the same breathing pulse and radial gradient — just fed a
+  // fixed, moderately-elevated intensity instead of live flare data, since
+  // this is a background flourish for the card, not a data display.
+
+  let flareBgWidth = 0;
+  let flareBgHeight = 0;
+  let flareBgClock = 0;
+
+  function resizeFlareBg() {
+    flareBgWidth = flareBg.clientWidth;
+    flareBgHeight = flareBg.clientHeight;
+    const bgDpr = Math.min(window.devicePixelRatio || 1, 2);
+    flareBg.width = flareBgWidth * bgDpr;
+    flareBg.height = flareBgHeight * bgDpr;
+    flareBgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+  }
+
+  function drawFlareBg(dt) {
+    const w = flareBgWidth;
+    const h = flareBgHeight;
+    if (!w || !h) return;
+    flareBgCtx.clearRect(0, 0, w, h);
+
+    flareBgClock += dt * (reduceMotion ? 0.002 : 0.006);
+    const t = flareBgClock * 40;
+    const center = { x: w / 2, y: h * 0.34 }; // higher in the frame than the card's own centre
+    const normalized = 0.65; // a fixed, moderately-elevated glow — not live data
+    const bgScale = Math.min(w, h);
+    // Bigger and brighter than the real core: most of this glow sits behind
+    // the opaque card, so it needs the extra size and brightness for enough
+    // of it to show past the card's edges.
+    const radius = mapRange(normalized, 0, 1, bgScale * 0.16, bgScale * 0.26);
+    const brightness = mapRange(normalized, 0, 1, 0.75, 0.95);
+    const breathe = 1 + Math.sin(t * 0.12) * 0.04;
+
+    const color = mix(palette.core, palette.amber, 0.22);
+    const outerRadius = radius * breathe * 3.2;
+    const gradient = flareBgCtx.createRadialGradient(center.x, center.y, 0, center.x, center.y, outerRadius);
+    gradient.addColorStop(0, rgba(color, brightness));
+    gradient.addColorStop(0.35, rgba(color, brightness * 0.45));
+    gradient.addColorStop(0.7, rgba(color, brightness * 0.12));
+    gradient.addColorStop(1, rgba(color, 0));
+
+    flareBgCtx.fillStyle = gradient;
+    flareBgCtx.beginPath();
+    flareBgCtx.arc(center.x, center.y, outerRadius, 0, Math.PI * 2);
+    flareBgCtx.fill();
+  }
+
+  let flareBgRunning = false;
+  let flareBgLastTime = 0;
+
+  function flareBgFrame(now) {
+    if (!flareBgRunning) return;
+    const dt = clamp(now - flareBgLastTime, 0, 64) / 16.6667;
+    flareBgLastTime = now;
+    drawFlareBg(dt);
+    requestAnimationFrame(flareBgFrame);
+  }
+
+  function startFlareBg() {
+    flareBg.classList.add('is-active');
+    if (flareBgRunning) return;
+    flareBgRunning = true;
+    flareBgLastTime = performance.now();
+    requestAnimationFrame(flareBgFrame);
+  }
+
+  function stopFlareBg() {
+    flareBgRunning = false;
+    flareBg.classList.remove('is-active');
   }
 
   // ---------- Algorithm Art: drawing ----------
@@ -1180,6 +1263,7 @@
   resize();
   resizeCmeBg();
   resizeAsteroidBg();
+  resizeFlareBg();
   ctx.fillStyle = 'rgb(10, 11, 14)';
   ctx.fillRect(0, 0, width, height);
 
