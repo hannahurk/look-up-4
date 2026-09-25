@@ -23,6 +23,12 @@
   const asteroidBgCtx = asteroidBg.getContext('2d');
   const flareBg = document.getElementById('flare-bg');
   const flareBgCtx = flareBg.getContext('2d');
+  const streakBg = document.getElementById('streak-bg');
+  const streakBgCtx = streakBg.getContext('2d');
+  const windBg = document.getElementById('wind-bg');
+  const windBgCtx = windBg.getContext('2d');
+  const auroraBg = document.getElementById('aurora-bg');
+  const auroraBgCtx = auroraBg.getContext('2d');
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('status-text');
 
@@ -232,12 +238,18 @@
     let activeIsCme = false;
     let activeIsAsteroid = false;
     let activeIsFlare = false;
+    let activeIsStreak = false;
+    let activeIsWind = false;
+    let activeIsAurora = false;
     document.querySelectorAll('#key-cards .fc-day').forEach((card) => {
       const isActive = Number(card.dataset.i) === index;
       card.classList.toggle('is-active', isActive);
       if (isActive && card.dataset.kind === 'ring') activeIsCme = true;
       if (isActive && card.dataset.kind === 'orbit') activeIsAsteroid = true;
       if (isActive && card.dataset.kind === 'core') activeIsFlare = true;
+      if (isActive && card.dataset.kind === 'streak') activeIsStreak = true;
+      if (isActive && card.dataset.kind === 'wind') activeIsWind = true;
+      if (isActive && card.dataset.kind === 'aurora') activeIsAurora = true;
     });
     if (activeIsCme) startCmeBg();
     else stopCmeBg();
@@ -245,6 +257,12 @@
     else stopAsteroidBg();
     if (activeIsFlare) startFlareBg();
     else stopFlareBg();
+    if (activeIsStreak) startStreakBg();
+    else stopStreakBg();
+    if (activeIsWind) startWindBg();
+    else stopWindBg();
+    if (activeIsAurora) startAuroraBg();
+    else stopAuroraBg();
   }
 
   function paintArtKey() {
@@ -547,6 +565,9 @@
     resizeCmeBg();
     resizeAsteroidBg();
     resizeFlareBg();
+    resizeStreakBg();
+    resizeWindBg();
+    resizeAuroraBg();
   }
 
   // ---------- coronal mass ejections card: decorative purple arcs ----------
@@ -591,7 +612,11 @@
 
     cmeBgCtx.lineCap = 'round';
     for (const ring of decorativeRings) {
-      const period = mapRange(ring.kms, 300, 2000, 5400, 1800);
+      // Much faster than the real arcs' speed-mapped timing (30-90s to cross
+      // the screen) — at that pace the outward flow is barely visible within
+      // a single ~12-15s card display. This sweeps the screen in a few
+      // seconds so the motion actually reads as flowing outward.
+      const period = mapRange(ring.kms, 300, 2000, 700, 300);
       ring.t += (dt / period) * (reduceMotion ? 0.15 : 1);
       if (ring.t >= 1) ring.t -= 1;
 
@@ -668,7 +693,10 @@
       eccentricity: 0.55 + rand() * 0.25,
       tilt: rand() * Math.PI,
       angle: rand() * Math.PI * 2,
-      angularSpeed: mapRange(rand(), 0, 1, 0.022, 0.11) * (rand() < 0.5 ? -1 : 1),
+      // Much faster than the real art's "one lap every 1-5 minutes" — at
+      // that pace the drift is too subtle to notice within a single card
+      // display, so this one completes a lap in roughly 15-40 seconds.
+      angularSpeed: mapRange(rand(), 0, 1, 0.16, 0.42) * (rand() < 0.5 ? -1 : 1),
       bodyRadiusFrac: 0.55 + rand() * 0.9, // multiplied by bgUi below
       hazardous: i === 1 || i === 3, // a mix of hazardous and non-hazardous, like the real art
     }));
@@ -791,8 +819,12 @@
     // the opaque card, so it needs the extra size and brightness for enough
     // of it to show past the card's edges.
     const radius = mapRange(normalized, 0, 1, bgScale * 0.16, bgScale * 0.26);
-    const brightness = mapRange(normalized, 0, 1, 0.75, 0.95);
-    const breathe = 1 + Math.sin(t * 0.12) * 0.04;
+    // A much bigger, clearly-visible pulse than the real core's subtle
+    // breathing (+/-4%) — that's too faint to notice within a 12-15s card
+    // display, so this one swings brightness along with size.
+    const pulse = Math.sin(t * 0.12);
+    const brightness = mapRange(normalized, 0, 1, 0.75, 0.95) * (0.82 + 0.18 * pulse);
+    const breathe = 1 + pulse * 0.22;
 
     const color = mix(palette.core, palette.amber, 0.22);
     const outerRadius = radius * breathe * 3.2;
@@ -830,6 +862,292 @@
   function stopFlareBg() {
     flareBgRunning = false;
     flareBg.classList.remove('is-active');
+  }
+
+  // ---------- geomagnetic activity card: decorative shooting stars ----------
+  //
+  // Same shape and easing as the real shooting stars in Algorithm Art
+  // (makeFineParticle, stepFineParticle, drawFineParticle) — a fixed
+  // moderately-elevated geomagnetic reading instead of live data, since this
+  // is a background flourish for the card, not a data display.
+
+  let streakBgWidth = 0;
+  let streakBgHeight = 0;
+  let streakParticles = [];
+  const STREAK_GEO = 0.6; // fixed, moderately-elevated — not live data
+  const STREAK_COUNT = 6;
+
+  function resizeStreakBg() {
+    streakBgWidth = streakBg.clientWidth;
+    streakBgHeight = streakBg.clientHeight;
+    const bgDpr = Math.min(window.devicePixelRatio || 1, 2);
+    streakBg.width = streakBgWidth * bgDpr;
+    streakBg.height = streakBgHeight * bgDpr;
+    streakBgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+    streakParticles = [];
+  }
+
+  function makeStreakParticle(bgUi) {
+    const angle = Math.PI * 0.15 + (Math.random() - 0.5) * 0.4;
+    const fromLeft = Math.random() < 0.5;
+    return {
+      x: fromLeft ? -20 * bgUi : Math.random() * streakBgWidth,
+      y: fromLeft ? Math.random() * streakBgHeight * 0.6 : -20 * bgUi,
+      angle,
+      sizeFactor: 0.75 + Math.random() * 0.5,
+      life: 0,
+      maxLife: 260 + Math.random() * 160,
+    };
+  }
+
+  function stepStreakParticle(p, speed) {
+    p.x += Math.cos(p.angle) * speed;
+    p.y += Math.sin(p.angle) * speed;
+    p.life++;
+    return (
+      p.life > p.maxLife ||
+      p.x < -60 || p.x > streakBgWidth + 60 ||
+      p.y < -60 || p.y > streakBgHeight + 60
+    );
+  }
+
+  function drawStreakParticle(p, bgUi) {
+    const lifeFrac = p.life / p.maxLife;
+    const fadeIn = Math.min(lifeFrac / 0.12, 1);
+    const fadeOut = 1 - Math.max((lifeFrac - 0.75) / 0.25, 0);
+    const alpha = Math.min(fadeIn, fadeOut);
+    if (alpha <= 0) return;
+
+    const length = mapRange(STREAK_GEO, 0, 1, 60, 200) * p.sizeFactor * bgUi;
+    const dx = Math.cos(p.angle);
+    const dy = Math.sin(p.angle);
+    const tailX = p.x - dx * length;
+    const tailY = p.y - dy * length;
+    const color = mix(palette.star, palette.amber, 0.3);
+
+    const gradient = streakBgCtx.createLinearGradient(tailX, tailY, p.x, p.y);
+    gradient.addColorStop(0, rgba(color, 0));
+    gradient.addColorStop(1, rgba(color, alpha));
+    streakBgCtx.strokeStyle = gradient;
+    streakBgCtx.lineWidth = mapRange(STREAK_GEO, 0, 1, 2.5, 6) * bgUi;
+    streakBgCtx.beginPath();
+    streakBgCtx.moveTo(tailX, tailY);
+    streakBgCtx.lineTo(p.x, p.y);
+    streakBgCtx.stroke();
+
+    streakBgCtx.beginPath();
+    streakBgCtx.fillStyle = rgba(color, alpha);
+    streakBgCtx.arc(p.x, p.y, mapRange(STREAK_GEO, 0, 1, 3, 6.5) * bgUi, 0, Math.PI * 2);
+    streakBgCtx.fill();
+  }
+
+  function drawStreakBg(dt) {
+    const w = streakBgWidth;
+    const h = streakBgHeight;
+    if (!w || !h) return;
+    streakBgCtx.clearRect(0, 0, w, h);
+
+    const bgUi = clamp(Math.min(w, h) / 750, 1, 2.2);
+    const speed = mapRange(STREAK_GEO, 0, 1, 0.6, 2.2) * bgUi * (reduceMotion ? 0.3 : 1);
+
+    while (streakParticles.length < STREAK_COUNT) streakParticles.push(makeStreakParticle(bgUi));
+    while (streakParticles.length > STREAK_COUNT) streakParticles.pop();
+
+    for (let i = streakParticles.length - 1; i >= 0; i--) {
+      const p = streakParticles[i];
+      const dead = stepStreakParticle(p, speed);
+      drawStreakParticle(p, bgUi);
+      if (dead) streakParticles[i] = makeStreakParticle(bgUi);
+    }
+  }
+
+  let streakBgRunning = false;
+  let streakBgLastTime = 0;
+
+  function streakBgFrame(now) {
+    if (!streakBgRunning) return;
+    const dt = clamp(now - streakBgLastTime, 0, 64) / 16.6667;
+    streakBgLastTime = now;
+    drawStreakBg(dt);
+    requestAnimationFrame(streakBgFrame);
+  }
+
+  function startStreakBg() {
+    streakBg.classList.add('is-active');
+    if (streakBgRunning) return;
+    streakBgRunning = true;
+    streakBgLastTime = performance.now();
+    requestAnimationFrame(streakBgFrame);
+  }
+
+  function stopStreakBg() {
+    streakBgRunning = false;
+    streakBg.classList.remove('is-active');
+  }
+
+  // ---------- solar wind card: decorative streaming dots ----------
+  //
+  // Same shape and easing as the real solar wind streaks in Algorithm Art
+  // (drawWind) — faint dots streaming radially outward from a central point
+  // — but fed a fixed, moderate wind speed instead of live NOAA data, since
+  // this is a background flourish for the card, not a data display. Sized
+  // up a bit from the real streaks since much of their inner travel is
+  // hidden behind the card.
+
+  let windBgWidth = 0;
+  let windBgHeight = 0;
+  let windBgParticles = [];
+  const WIND_BG_KMS = 550; // fixed, moderate-steady pace — not live data
+
+  function resizeWindBg() {
+    windBgWidth = windBg.clientWidth;
+    windBgHeight = windBg.clientHeight;
+    const bgDpr = Math.min(window.devicePixelRatio || 1, 2);
+    windBg.width = windBgWidth * bgDpr;
+    windBg.height = windBgHeight * bgDpr;
+    windBgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+    windBgParticles = [];
+  }
+
+  function drawWindBg(dt) {
+    const w = windBgWidth;
+    const h = windBgHeight;
+    if (!w || !h) return;
+    windBgCtx.clearRect(0, 0, w, h);
+
+    const bgUi = clamp(Math.min(w, h) / 750, 1, 2.2);
+    const center = { x: w / 2, y: h / 2 };
+    const startR = Math.min(w, h) * 0.06;
+    const endR = Math.hypot(Math.max(center.x, w - center.x), Math.max(center.y, h - center.y));
+    const span = endR - startR;
+    const target = Math.round(clamp((w * h) / 30000, 20, 60));
+
+    while (windBgParticles.length < target) {
+      windBgParticles.push({ angle: Math.random() * Math.PI * 2, t: Math.random(), size: 2.2 + Math.random() * 1.3 });
+    }
+    windBgParticles.length = target;
+
+    const speed = mapRange(WIND_BG_KMS, 250, 900, 0.18, 1.1) * bgUi * (reduceMotion ? 0.15 : 1);
+    const color = mix(palette.core, palette.star, 0.6);
+    const trail = (14 + speed * 8) * bgUi;
+
+    windBgCtx.lineCap = 'round';
+    for (const p of windBgParticles) {
+      p.t += (speed * dt) / span;
+      if (p.t >= 1) {
+        p.t = 0;
+        p.angle = Math.random() * Math.PI * 2;
+      }
+      const alpha = 0.9 * Math.min(p.t / 0.05, 1) * (1 - Math.max((p.t - 0.88) / 0.12, 0));
+      if (alpha <= 0) continue;
+      const r = startR + p.t * span;
+      const dx = Math.cos(p.angle);
+      const dy = Math.sin(p.angle);
+      windBgCtx.strokeStyle = rgba(color, alpha);
+      windBgCtx.lineWidth = p.size * bgUi;
+      windBgCtx.beginPath();
+      windBgCtx.moveTo(center.x + dx * Math.max(r - trail, startR), center.y + dy * Math.max(r - trail, startR));
+      windBgCtx.lineTo(center.x + dx * r, center.y + dy * r);
+      windBgCtx.stroke();
+    }
+    windBgCtx.lineCap = 'butt';
+  }
+
+  let windBgRunning = false;
+  let windBgLastTime = 0;
+
+  function windBgFrame(now) {
+    if (!windBgRunning) return;
+    const dt = clamp(now - windBgLastTime, 0, 64) / 16.6667;
+    windBgLastTime = now;
+    drawWindBg(dt);
+    requestAnimationFrame(windBgFrame);
+  }
+
+  function startWindBg() {
+    windBg.classList.add('is-active');
+    if (windBgRunning) return;
+    windBgRunning = true;
+    windBgLastTime = performance.now();
+    requestAnimationFrame(windBgFrame);
+  }
+
+  function stopWindBg() {
+    windBgRunning = false;
+    windBg.classList.remove('is-active');
+  }
+
+  // ---------- aurora glow card: decorative aurora curtains ----------
+  //
+  // Same shape and easing as the real aurora in Algorithm Art (drawAurora)
+  // — the same swaying vertical curtains hanging from the top — but fed a
+  // fixed, strong intensity instead of live Bz data, since this is a
+  // background flourish for the card, not a data display.
+
+  let auroraBgWidth = 0;
+  let auroraBgHeight = 0;
+  let auroraBgClock = 0;
+  const AURORA_BG = 0.75; // fixed, strong intensity — not live data
+
+  function resizeAuroraBg() {
+    auroraBgWidth = auroraBg.clientWidth;
+    auroraBgHeight = auroraBg.clientHeight;
+    const bgDpr = Math.min(window.devicePixelRatio || 1, 2);
+    auroraBg.width = auroraBgWidth * bgDpr;
+    auroraBg.height = auroraBgHeight * bgDpr;
+    auroraBgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+  }
+
+  function drawAuroraBg(dt) {
+    const w = auroraBgWidth;
+    const h = auroraBgHeight;
+    if (!w || !h) return;
+    auroraBgCtx.clearRect(0, 0, w, h);
+
+    auroraBgClock += dt * (reduceMotion ? 0.001 : 0.0025); // slower, calmer sway than the real art
+    const t = auroraBgClock * 40;
+    const a = AURORA_BG;
+    const maxH = h * (0.14 + 0.14 * a);
+    const step = Math.max(6, Math.round(w / 160));
+    const topAlpha = mapRange(a, 0.35, 1, 0.55, 0.85);
+
+    for (let layer = 0; layer < 2; layer++) {
+      const color = layer === 0 ? palette.aurora : mix(palette.aurora, palette.core, 0.55);
+      for (let x = 0; x < w; x += step) {
+        const sway = 0.55 + 0.3 * Math.sin(x * 0.011 + t * 1.4 + layer * 2) + 0.15 * Math.sin(x * 0.027 - t * 0.9);
+        const curtainH = maxH * (layer ? 0.7 : 1) * sway;
+        const gradient = auroraBgCtx.createLinearGradient(0, 0, 0, curtainH);
+        gradient.addColorStop(0, rgba(color, topAlpha));
+        gradient.addColorStop(0.45, rgba(color, topAlpha * 0.4));
+        gradient.addColorStop(1, rgba(color, 0));
+        auroraBgCtx.fillStyle = gradient;
+        auroraBgCtx.fillRect(x, 0, step + 1, curtainH);
+      }
+    }
+  }
+
+  let auroraBgRunning = false;
+  let auroraBgLastTime = 0;
+
+  function auroraBgFrame(now) {
+    if (!auroraBgRunning) return;
+    const dt = clamp(now - auroraBgLastTime, 0, 64) / 16.6667;
+    auroraBgLastTime = now;
+    drawAuroraBg(dt);
+    requestAnimationFrame(auroraBgFrame);
+  }
+
+  function startAuroraBg() {
+    auroraBg.classList.add('is-active');
+    if (auroraBgRunning) return;
+    auroraBgRunning = true;
+    auroraBgLastTime = performance.now();
+    requestAnimationFrame(auroraBgFrame);
+  }
+
+  function stopAuroraBg() {
+    auroraBgRunning = false;
+    auroraBg.classList.remove('is-active');
   }
 
   // ---------- Algorithm Art: drawing ----------
@@ -1264,6 +1582,9 @@
   resizeCmeBg();
   resizeAsteroidBg();
   resizeFlareBg();
+  resizeStreakBg();
+  resizeWindBg();
+  resizeAuroraBg();
   ctx.fillStyle = 'rgb(10, 11, 14)';
   ctx.fillRect(0, 0, width, height);
 
