@@ -16,7 +16,7 @@ Some sources don't need a key at all, so `app.js` fetches them directly: [NASA's
 
 ## The slides
 
-Each slide holds for 15–18 seconds (a random time in that range) — except the art, which always holds the full 40 seconds — then the sign moves on to the next — and a camera detecting a new visitor (movement after a few seconds of stillness) advances it immediately. The order: **APOD photo → EPIC Earth image → six Cosmic Meteorology slides → Algorithm Art → back to APOD.**
+Each slide holds for 15–18 seconds (a random time in that range) — except the art, which always holds the full 40 seconds — then the sign moves on to the next — and a camera detecting a new visitor (movement after a few seconds of stillness) advances it immediately, with a brief sideways motion blur (skipped if the device asks for reduced motion). The order: **APOD photo → EPIC Earth image → six Cosmic Meteorology slides → Algorithm Art → back to APOD.**
 
 - **APOD** — full-bleed image or video, whichever picture NASA published today.
 - **EPIC** — the most recent full-disk photo of Earth from the DSCOVR satellite.

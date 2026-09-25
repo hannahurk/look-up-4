@@ -1539,11 +1539,37 @@
 
   let lastMotionAt = 0;
 
+  // A gentle sideways blur that ramps up and back down over the slide change,
+  // only when a new visitor triggers it (not on the ordinary timer).
+  const MOTION_BLUR_MS = 1100;
+  const MOTION_BLUR_PEAK = 14; // horizontal blur radius in px
+  let motionBlurActive = false;
+
+  function motionBlur() {
+    const node = document.getElementById('motion-blur-node');
+    if (!node || motionBlurActive || reduceMotion) return;
+    motionBlurActive = true;
+    document.body.classList.add('motion-blur');
+    const start = performance.now();
+    (function step(now) {
+      const p = Math.min((now - start) / MOTION_BLUR_MS, 1);
+      node.setAttribute('stdDeviation', (MOTION_BLUR_PEAK * Math.sin(Math.PI * p)).toFixed(1) + ' 0');
+      if (p < 1) requestAnimationFrame(step);
+      else {
+        document.body.classList.remove('motion-blur');
+        motionBlurActive = false;
+      }
+    })(start);
+  }
+
   function onMotion() {
     const now = performance.now();
     const isNewVisitor = now - lastMotionAt > MOTION_QUIET_MS;
     lastMotionAt = now;
-    if (isNewVisitor) advance();
+    if (isNewVisitor) {
+      motionBlur();
+      advance();
+    }
   }
 
   async function startCameraMotion() {

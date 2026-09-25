@@ -52,6 +52,14 @@ body.mode-art #art {
   pointer-events: auto;
 }
 
+/* Sideways blur while the slide changes for a new visitor (see motionBlur in app.js) */
+body.motion-blur .oculus,
+body.motion-blur .epic-screen,
+body.motion-blur .stat-screen,
+body.motion-blur #art {
+  filter: url(#motion-blur-filter);
+}
+
 /* ---- APOD photo/video backdrop ---- */
 
 .oculus {
