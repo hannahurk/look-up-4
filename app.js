@@ -19,6 +19,8 @@
   const ctx = canvas.getContext('2d');
   const cmeBg = document.getElementById('cme-bg');
   const cmeBgCtx = cmeBg.getContext('2d');
+  const asteroidBg = document.getElementById('asteroid-bg');
+  const asteroidBgCtx = asteroidBg.getContext('2d');
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('status-text');
 
@@ -226,13 +228,17 @@
   function showKeyCard() {
     const index = mode.startsWith('key:') ? Number(mode.slice(4)) : -1;
     let activeIsCme = false;
+    let activeIsAsteroid = false;
     document.querySelectorAll('#key-cards .fc-day').forEach((card) => {
       const isActive = Number(card.dataset.i) === index;
       card.classList.toggle('is-active', isActive);
       if (isActive && card.dataset.kind === 'ring') activeIsCme = true;
+      if (isActive && card.dataset.kind === 'orbit') activeIsAsteroid = true;
     });
     if (activeIsCme) startCmeBg();
     else stopCmeBg();
+    if (activeIsAsteroid) startAsteroidBg();
+    else stopAsteroidBg();
   }
 
   function paintArtKey() {
@@ -533,6 +539,7 @@
     rebuildOrbits(latestData.asteroids || []);
     rebuildParticles();
     resizeCmeBg();
+    resizeAsteroidBg();
   }
 
   // ---------- coronal mass ejections card: decorative purple arcs ----------
@@ -588,13 +595,13 @@
       const a1 = ring.angle + ring.half;
 
       cmeBgCtx.strokeStyle = rgba(palette.cme, alpha * 0.3);
-      cmeBgCtx.lineWidth = (8 + ring.t * 16) * bgUi;
+      cmeBgCtx.lineWidth = (12 + ring.t * 24) * bgUi;
       cmeBgCtx.beginPath();
       cmeBgCtx.arc(center.x, center.y, r, a0, a1);
       cmeBgCtx.stroke();
 
       cmeBgCtx.strokeStyle = rgba(palette.cme, alpha);
-      cmeBgCtx.lineWidth = (2.5 + ring.t * 2.5) * bgUi;
+      cmeBgCtx.lineWidth = (4 + ring.t * 4) * bgUi;
       cmeBgCtx.beginPath();
       cmeBgCtx.arc(center.x, center.y, r, a0, a1);
       cmeBgCtx.stroke();
@@ -624,6 +631,122 @@
   function stopCmeBg() {
     cmeBgRunning = false;
     cmeBg.classList.remove('is-active');
+  }
+
+  // ---------- asteroid tracker card: decorative orbit rings ----------
+  //
+  // Same shape, easing and speed math as the real asteroid orbits in
+  // Algorithm Art (orbitPosition, drawOrbits, drawBodies) — just fed a fixed
+  // set of made-up orbits (a mix of hazardous and non-hazardous) instead of
+  // live NEO data, since this is a background flourish for the card, not a
+  // data display.
+
+  let asteroidBgWidth = 0;
+  let asteroidBgHeight = 0;
+
+  function resizeAsteroidBg() {
+    asteroidBgWidth = asteroidBg.clientWidth;
+    asteroidBgHeight = asteroidBg.clientHeight;
+    const bgDpr = Math.min(window.devicePixelRatio || 1, 2);
+    asteroidBg.width = asteroidBgWidth * bgDpr;
+    asteroidBg.height = asteroidBgHeight * bgDpr;
+    asteroidBgCtx.setTransform(bgDpr, 0, 0, bgDpr, 0, 0);
+  }
+
+  const decorativeOrbits = (() => {
+    const rand = makeRandom(hashString('asteroid-bg-decorative'));
+    const count = 5;
+    return Array.from({ length: count }, (_, i) => ({
+      radiusFrac: 0.32 + (i / count) * 0.6, // fraction of maxRadius, spread evenly then jittered
+      eccentricity: 0.55 + rand() * 0.25,
+      tilt: rand() * Math.PI,
+      angle: rand() * Math.PI * 2,
+      angularSpeed: mapRange(rand(), 0, 1, 0.022, 0.11) * (rand() < 0.5 ? -1 : 1),
+      bodyRadiusFrac: 0.55 + rand() * 0.9, // multiplied by bgUi below
+      hazardous: i === 1 || i === 3, // a mix of hazardous and non-hazardous, like the real art
+    }));
+  })();
+
+  function decorativeOrbitPosition(orbit, center, radius, stretch) {
+    const x0 = Math.cos(orbit.angle) * radius;
+    const y0 = Math.sin(orbit.angle) * radius * orbit.eccentricity;
+    const cos = Math.cos(orbit.tilt);
+    const sin = Math.sin(orbit.tilt);
+    return {
+      x: center.x + (x0 * cos - y0 * sin) * stretch,
+      y: center.y + x0 * sin + y0 * cos,
+    };
+  }
+
+  function drawAsteroidBg(dt) {
+    const w = asteroidBgWidth;
+    const h = asteroidBgHeight;
+    if (!w || !h) return;
+    asteroidBgCtx.clearRect(0, 0, w, h);
+
+    const center = { x: w / 2, y: h / 2 };
+    const maxRadius = Math.min(w, h) * 0.6;
+    const bgUi = clamp(Math.min(w, h) / 750, 1, 2.2);
+    const stretch = clamp((0.92 * Math.min(center.x, w - center.x)) / maxRadius, 1, 1.8);
+
+    for (const orbit of decorativeOrbits) {
+      orbit.angle += orbit.angularSpeed * (dt / 60) * (reduceMotion ? 0.15 : 1);
+      const radius = orbit.radiusFrac * maxRadius;
+      const bodyRadius = orbit.bodyRadiusFrac * 9 * bgUi;
+
+      asteroidBgCtx.save();
+      asteroidBgCtx.translate(center.x, center.y);
+      asteroidBgCtx.scale(stretch, 1);
+      asteroidBgCtx.rotate(orbit.tilt);
+      asteroidBgCtx.scale(1, orbit.eccentricity);
+      asteroidBgCtx.beginPath();
+      asteroidBgCtx.arc(0, 0, radius, 0, Math.PI * 2);
+      asteroidBgCtx.strokeStyle = orbit.hazardous ? rgba(palette.amber, 0.55) : rgba(palette.star, 0.45);
+      asteroidBgCtx.lineWidth = 4 * bgUi;
+      asteroidBgCtx.stroke();
+      asteroidBgCtx.restore();
+
+      const pos = decorativeOrbitPosition(orbit, center, radius, stretch);
+      const color = orbit.hazardous ? mix(palette.amber, palette.core, 0.5) : palette.core;
+      const alpha = orbit.hazardous ? 0.85 : 0.75;
+
+      const glow = asteroidBgCtx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, bodyRadius * 2.6);
+      glow.addColorStop(0, rgba(color, alpha));
+      glow.addColorStop(1, rgba(color, 0));
+      asteroidBgCtx.fillStyle = glow;
+      asteroidBgCtx.beginPath();
+      asteroidBgCtx.arc(pos.x, pos.y, bodyRadius * 2.6, 0, Math.PI * 2);
+      asteroidBgCtx.fill();
+
+      asteroidBgCtx.beginPath();
+      asteroidBgCtx.fillStyle = rgba(color, Math.min(alpha + 0.25, 1));
+      asteroidBgCtx.arc(pos.x, pos.y, bodyRadius, 0, Math.PI * 2);
+      asteroidBgCtx.fill();
+    }
+  }
+
+  let asteroidBgRunning = false;
+  let asteroidBgLastTime = 0;
+
+  function asteroidBgFrame(now) {
+    if (!asteroidBgRunning) return;
+    const dt = clamp(now - asteroidBgLastTime, 0, 64) / 16.6667;
+    asteroidBgLastTime = now;
+    drawAsteroidBg(dt);
+    requestAnimationFrame(asteroidBgFrame);
+  }
+
+  function startAsteroidBg() {
+    asteroidBg.classList.add('is-active');
+    if (asteroidBgRunning) return;
+    asteroidBgRunning = true;
+    asteroidBgLastTime = performance.now();
+    requestAnimationFrame(asteroidBgFrame);
+  }
+
+  function stopAsteroidBg() {
+    asteroidBgRunning = false;
+    asteroidBg.classList.remove('is-active');
   }
 
   // ---------- Algorithm Art: drawing ----------
@@ -1056,6 +1179,7 @@
   window.addEventListener('resize', resize);
   resize();
   resizeCmeBg();
+  resizeAsteroidBg();
   ctx.fillStyle = 'rgb(10, 11, 14)';
   ctx.fillRect(0, 0, width, height);
 

@@ -212,9 +212,10 @@ body.mode-art #art {
 .key-screen .fc-cond { font-size: clamp(30px, min(6.4vw, 11vh), 100px); }
 .key-screen .fc-row { font-size: clamp(16px, min(2.6vw, 4.4vh), 40px); }
 
-/* Decorative purple arcs behind the coronal mass ejections card, echoing the
-   arcs in Algorithm Art. Not live data — just motion, always on a loop. */
-.cme-bg {
+/* Decorative backgrounds behind a Cosmic Meteorology card, echoing that
+   element of Algorithm Art. Not live data — just motion, always on a loop.
+   Only the card matching the current slide gets .is-active (app.js). */
+.key-bg {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -223,7 +224,7 @@ body.mode-art #art {
   opacity: 0;
   transition: opacity 1.2s ease;
 }
-body.mode-key .cme-bg.is-active { opacity: 1; }
+body.mode-key .key-bg.is-active { opacity: 1; }
 
 @keyframes fc-in {
   from { opacity: 0; transform: translateY(10px); }
