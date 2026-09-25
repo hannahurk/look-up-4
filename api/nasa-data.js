@@ -7,7 +7,11 @@ const NEO_URL = 'https://api.nasa.gov/neo/rest/v1/feed';
 const FLR_URL = 'https://api.nasa.gov/DONKI/FLR';
 const CME_URL = 'https://api.nasa.gov/DONKI/CME';
 const GST_URL = 'https://api.nasa.gov/DONKI/GST';
-const APOD_URL = 'https://api.nasa.gov/planetary/apod';
+// NASA moved APOD to a new WordPress-based endpoint on 2026-09-10. The old
+// one is still answering but goes offline 2026-12-01, so the new one is tried
+// first and the old one is kept as a backup until it disappears.
+const APOD_URL = 'https://science.nasa.gov/wp-json/wp/v2/apod-basic/';
+const APOD_LEGACY_URL = 'https://api.nasa.gov/planetary/apod';
 
 const FLARE_CLASS_BASE = { A: 1, B: 10, C: 100, M: 1000, X: 10000 };
 
@@ -72,6 +76,35 @@ function maxKpIndex(storms) {
     }
   }
   return max;
+}
+
+// The new endpoint returns a list of recent days (newest published first).
+// `url` is now a web *page*, and `hdurl` is the actual picture — on video
+// days too, where it's a still frame — so `hdurl` is always what we show.
+function normalizeAPODNew(list) {
+  const entries = Array.isArray(list) ? list : list ? [list] : [];
+  const latest = entries
+    .filter((entry) => entry && entry.hdurl)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
+  if (!latest) return null;
+  return {
+    title: latest.title || '',
+    mediaType: 'image',
+    imageUrl: latest.hdurl,
+    fallbackImageUrl: '',
+    videoUrl: '',
+  };
+}
+
+async function fetchAPOD(apiKey) {
+  try {
+    const fromNew = normalizeAPODNew(await fetchJSON(APOD_URL, apiKey));
+    if (fromNew) return fromNew;
+    console.error('nasa-data: apod (new endpoint) returned no usable picture');
+  } catch (err) {
+    console.error('nasa-data: apod (new endpoint) failed —', err && err.message);
+  }
+  return normalizeAPOD(await fetchJSON(APOD_LEGACY_URL, apiKey));
 }
 
 function normalizeAPOD(data) {
@@ -168,7 +201,7 @@ module.exports = async (req, res) => {
     fetchJSON(`${FLR_URL}?startDate=${startDate}&endDate=${endDate}`, apiKey),
     fetchJSON(`${CME_URL}?startDate=${startDate}&endDate=${endDate}`, apiKey),
     fetchJSON(`${GST_URL}?startDate=${startDate}&endDate=${endDate}`, apiKey),
-    fetchJSON(APOD_URL, apiKey),
+    fetchAPOD(apiKey),
   ]);
 
   const labeled = {
@@ -198,7 +231,7 @@ module.exports = async (req, res) => {
       flares: flrResult.status === 'fulfilled' ? 'live' : 'unavailable',
       cmes: cmeResult.status === 'fulfilled' ? 'live' : 'unavailable',
       storms: gstResult.status === 'fulfilled' ? 'live' : 'unavailable',
-      apod: apodResult.status === 'fulfilled' ? 'live' : 'unavailable',
+      apod: apodResult.status === 'fulfilled' && apodResult.value ? 'live' : 'unavailable',
     },
     spaceWeather: {
       flareCount: flares.length,
@@ -211,7 +244,7 @@ module.exports = async (req, res) => {
     },
     cmes: recentCMEs(cmes),
     asteroids: neo ? normalizeAsteroids(neo) : [],
-    apod: apodResult.status === 'fulfilled' ? normalizeAPOD(apodResult.value) : null,
+    apod: apodResult.status === 'fulfilled' ? apodResult.value : null,
   };
 
   res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
