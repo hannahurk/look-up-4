@@ -1109,10 +1109,13 @@
     // but tuned to read at the same unhurried tempo).
     auroraBgClock += dt * (reduceMotion ? 0.00018 : 0.00045);
     const t = auroraBgClock * 40;
+    // A slow overall brightness pulse, layered on top of the sway, on its own
+    // (even slower) cycle so it reads as breathing rather than flickering.
+    const pulse = 0.82 + 0.18 * Math.sin(t * 0.25);
     const a = AURORA_BG;
     const maxH = h * (0.14 + 0.14 * a);
     const step = Math.max(6, Math.round(w / 160));
-    const topAlpha = mapRange(a, 0.35, 1, 0.55, 0.85);
+    const topAlpha = mapRange(a, 0.35, 1, 0.55, 0.85) * pulse;
 
     for (let layer = 0; layer < 2; layer++) {
       const color = layer === 0 ? palette.aurora : mix(palette.aurora, palette.core, 0.55);
@@ -1462,8 +1465,8 @@
 
   // ---------- slide cycle ----------
   //
-  // Each slide holds for 12-15 seconds (random within that range), except the
-  // artwork, which always holds a full 20 seconds, then the sign moves to the
+  // Each slide holds for 15-18 seconds (random within that range), except the
+  // artwork, which always holds a full 30 seconds, then the sign moves to the
   // next one:
   // APOD photo → EPIC Earth image → one Cosmic Meteorology slide per card
   // (geomagnetic activity, solar wind, coronal mass ejections, aurora, solar flare strength,
@@ -1473,9 +1476,9 @@
   // timer restarts. Continuous movement doesn't skip screens. Mouse/touch/
   // keyboard activity counts as movement too, for desks and testing.
 
-  const SLIDE_DWELL_MIN_MS = 12000; // every slide holds 12-15 s unless a visitor arrives
-  const SLIDE_DWELL_MAX_MS = 15000;
-  const ART_DWELL_MS = 20000; // the artwork always gets a full 20 s
+  const SLIDE_DWELL_MIN_MS = 15000; // every slide holds 15-18 s unless a visitor arrives
+  const SLIDE_DWELL_MAX_MS = 18000;
+  const ART_DWELL_MS = 30000; // the artwork always gets a full 30 s
   // Every other slide is a random 12-15 s.
   const nextDwell = () =>
     mode === 'art' ? ART_DWELL_MS : SLIDE_DWELL_MIN_MS + Math.random() * (SLIDE_DWELL_MAX_MS - SLIDE_DWELL_MIN_MS);
@@ -1516,8 +1519,8 @@
 
   const MOTION_SAMPLE_MS = 120;
   const MOTION_QUIET_MS = 3000; // stillness needed before movement counts as a new visitor
-  const PIXEL_DELTA = 28; // per-pixel brightness change (0-255) that counts as "changed"
-  const MOTION_MIN_FRACTION = 0.015; // share of pixels changed to count as movement
+  const PIXEL_DELTA = 16; // per-pixel brightness change (0-255) that counts as "changed" — high sensitivity
+  const MOTION_MIN_FRACTION = 0.006; // share of pixels changed to count as movement — high sensitivity
   const MOTION_MAX_FRACTION = 0.6; // above this it's a lighting/exposure shift, not a person
   const SAMPLE_W = 32;
   const SAMPLE_H = 24;
