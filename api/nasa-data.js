@@ -4,9 +4,15 @@
 // from. Never forwards the key or the raw NASA payloads to the browser.
 
 const NEO_URL = 'https://api.nasa.gov/neo/rest/v1/feed';
-const FLR_URL = 'https://api.nasa.gov/DONKI/FLR';
-const CME_URL = 'https://api.nasa.gov/DONKI/CME';
-const GST_URL = 'https://api.nasa.gov/DONKI/GST';
+// CCMC (who run DONKI behind api.nasa.gov) cut over their own infrastructure
+// on 2026-09-30, and api.nasa.gov/DONKI's proxy started redirecting to a
+// notice page instead of data. Their docs still list the old address with no
+// migration notice, so this may be a temporary proxy issue on NASA's side —
+// but CCMC's direct replacement host works today, so it's tried as a backup.
+// It ignores api_key entirely (confirmed: same response with no key, DEMO_KEY,
+// or a bogus one), so no key is sent to it.
+const DONKI_BASE = 'https://api.nasa.gov/DONKI';
+const DONKI_BACKUP_BASE = 'https://ccmc.gsfc.nasa.gov/DONKI-API/get';
 // NASA moved APOD to a new WordPress-based endpoint on 2026-09-10. The old
 // one is still answering but goes offline 2026-12-01, so the new one is tried
 // first and the old one is kept as a backup until it disappears. After that
@@ -30,6 +36,23 @@ function dateRange(daysBack) {
 async function fetchJSON(url, apiKey) {
   if (!apiKey) throw new Error('NASA_API_KEY is not configured');
   const res = await fetch(url + (url.includes('?') ? '&' : '?') + `api_key=${apiKey}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}${body ? ' — ' + body.slice(0, 300) : ''}`);
+  }
+  return res.json();
+}
+
+// Try NASA's official DONKI address first; if it's down, fall back to CCMC's
+// own host directly. `query` is the part after the kind, e.g. "FLR" plus
+// "?startDate=...&endDate=...".
+async function fetchDONKI(kind, query, apiKey) {
+  try {
+    return await fetchJSON(`${DONKI_BASE}/${kind}${query}`, apiKey);
+  } catch (err) {
+    console.error(`nasa-data: ${kind} (api.nasa.gov) failed —`, err && err.message);
+  }
+  const res = await fetch(`${DONKI_BACKUP_BASE}/${kind}${query}`);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`HTTP ${res.status}${body ? ' — ' + body.slice(0, 300) : ''}`);
@@ -199,9 +222,9 @@ module.exports = async (req, res) => {
 
   const [neoResult, flrResult, cmeResult, gstResult, apodResult] = await Promise.allSettled([
     fetchJSON(`${NEO_URL}?start_date=${today}&end_date=${today}`, apiKey),
-    fetchJSON(`${FLR_URL}?startDate=${startDate}&endDate=${endDate}`, apiKey),
-    fetchJSON(`${CME_URL}?startDate=${startDate}&endDate=${endDate}`, apiKey),
-    fetchJSON(`${GST_URL}?startDate=${startDate}&endDate=${endDate}`, apiKey),
+    fetchDONKI('FLR', `?startDate=${startDate}&endDate=${endDate}`, apiKey),
+    fetchDONKI('CME', `?startDate=${startDate}&endDate=${endDate}`, apiKey),
+    fetchDONKI('GST', `?startDate=${startDate}&endDate=${endDate}`, apiKey),
     fetchAPOD(apiKey),
   ]);
 
