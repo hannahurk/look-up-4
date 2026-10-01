@@ -1240,7 +1240,7 @@
 
   function drawBodies(dt, center, elevated) {
     for (const orbit of orbits) {
-      orbit.angle += orbit.angularSpeed * (dt / 60) * (reduceMotion ? 0.15 : 1); // dt is in 60fps frames
+      orbit.angle += orbit.angularSpeed * (dt / 60); // dt is in 60fps frames; real-data speed, not slowed by the display's reduce-motion setting
       const pos = orbitPosition(orbit, center);
       const color = orbit.hazardous ? mix(palette.amber, palette.core, elevated ? 0.25 : 0.5) : palette.core;
       const alpha = orbit.hazardous ? 0.85 : 0.75;
@@ -1319,7 +1319,7 @@
     }
     windParticles.length = target;
 
-    const speed = mapRange(shown.windKms, 250, 900, 0.18, 1.1) * ui * (reduceMotion ? 0.15 : 1);
+    const speed = mapRange(shown.windKms, 250, 900, 0.18, 1.1) * ui; // real-data speed, not slowed by the display's reduce-motion setting
     const color = mix(palette.core, palette.star, 0.6);
     const trail = (14 + speed * 8) * ui;
 
@@ -1370,7 +1370,7 @@
     ctx.lineCap = 'round';
     for (const ring of cmeRings) {
       const period = mapRange(ring.kms, 300, 2000, 5400, 1800); // frames to cross the screen (~30-90 s)
-      ring.t += (dt / period) * (reduceMotion ? 0.15 : 1);
+      ring.t += dt / period; // real-data speed, not slowed by the display's reduce-motion setting
       if (ring.t >= 1) ring.t -= 1;
 
       const alpha = 0.8 * Math.min(ring.t / 0.06, 1) * (1 - Math.max((ring.t - 0.85) / 0.15, 0));
